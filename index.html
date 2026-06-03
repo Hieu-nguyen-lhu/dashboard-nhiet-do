@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FoodStorage Performance Dashboard - Giám sát bảo quản thực phẩm</title>
+  <meta name="description" content="Trang web giám sát hiệu suất lưu trữ thực phẩm và điều kiện môi trường thời gian thực cho ESP32-C3 và hệ thống cảm biến thông minh.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@300..700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+  <!-- Chart.js CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+
+  <!-- Audio Element for Alarm Sound -->
+  <audio id="alarm-sound" loop src="https://assets.mixkit.co/active_storage/sfx/2869/2869-100.wav" preload="auto"></audio>
+
+  <div class="container">
+    <!-- Header -->
+    <header class="glass">
+      <div class="brand">
+        <div class="brand-icon">
+          <i data-lucide="shield-alert"></i>
+        </div>
+        <div class="brand-info">
+          <h1>Smart Food Storage</h1>
+          <p>Hệ Thống Giám Sát Hiệu Suất Lưu Trữ Thực Phẩm</p>
+        </div>
+      </div>
+      
+      <div class="header-status">
+        <!-- Sound Alert Toggle -->
+        <div class="sound-toggle-wrapper">
+          <i data-lucide="volume-2" id="sound-icon" class="sound-indicator"></i>
+          <span class="sound-toggle-label" for="sound-switch">Âm thanh cảnh báo</span>
+          <label class="switch">
+            <input type="checkbox" id="sound-switch" checked>
+            <span class="slider-switch"></span>
+          </label>
+        </div>
+
+        <!-- Connection Status -->
+        <div id="connection-status" class="connection-badge simulated">
+          <span class="dot pulse"></span>
+          <span id="connection-text">Giả Lập Live</span>
+        </div>
+
+        <!-- Time Display -->
+        <div id="time-display" class="time-display">--:--:-- | --/--/----</div>
+      </div>
+    </header>
+
+    <!-- Top Alert Notification Area -->
+    <div id="active-alerts-container" class="alerts-container">
+      <!-- Alerts will be dynamically inserted here -->
+    </div>
+
+    <!-- Main Dashboard Grid -->
+    <div class="dashboard-grid">
+      
+      <!-- BENTO STAT CARDS GRID (Top Section) -->
+      <div class="stats-wrapper">
+        
+        <!-- CARD 1: Combined Climate Widget (DHT22) - Spans 2 cols, 2 rows -->
+        <div id="card-env" class="bento-card span-2-cols span-2-rows env-widget">
+          <div class="env-header">
+            <div class="env-title-group">
+              <h3>Khí hậu tủ chứa</h3>
+              <p>DHT22 Smart Climate Control</p>
+            </div>
+            <span id="env-status" class="env-status-badge">Ổn định</span>
+          </div>
+          
+          <div class="env-body">
+            <!-- Zone 1: Temperature -->
+            <div id="card-temp" class="env-reading">
+              <span class="reading-label">
+                <i data-lucide="thermometer" style="width: 14px; height: 14px; color: var(--temp);"></i> Nhiệt độ
+              </span>
+              <div class="reading-val-box">
+                <span id="temp-val" class="reading-val">2.4</span>
+                <span class="reading-unit">°C</span>
+              </div>
+              <div class="env-bar-track">
+                <div id="temp-bar" class="env-bar-fill temp-bar"></div>
+              </div>
+              <div class="env-limits">
+                <span>Min: <span id="temp-min-lbl">--</span>°C</span>
+                <span>Max: <span id="temp-max-lbl">--</span>°C</span>
+              </div>
+            </div>
+            
+            <!-- Zone 2: Humidity -->
+            <div id="card-humidity" class="env-reading">
+              <span class="reading-label">
+                <i data-lucide="droplets" style="width: 14px; height: 14px; color: var(--humidity);"></i> Độ ẩm
+              </span>
+              <div class="reading-val-box">
+                <span id="humidity-val" class="reading-val">62</span>
+                <span class="reading-unit">%</span>
+              </div>
+              <div class="env-bar-track">
+                <div id="humidity-bar" class="env-bar-fill hum-bar"></div>
+              </div>
+              <div class="env-limits">
+                <span>Min: <span id="humidity-min-lbl">--</span>%</span>
+                <span>Max: <span id="humidity-max-lbl">--</span>%</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- CARD 2: Door Status (Magnetic NC) - Spans 1 col, 1 row -->
+        <div id="card-door" class="bento-card accessory-tile">
+          <div class="tile-top">
+            <div class="tile-icon">
+              <i data-lucide="door-closed" id="door-icon"></i>
+            </div>
+            <span id="door-badge" class="badge-status normal">An toàn</span>
+          </div>
+          <div class="tile-body">
+            <div class="tile-value"><span id="door-val">ĐÓNG</span></div>
+            <div class="tile-desc">Cửa tủ (NC) • Mở: <span id="door-timer">0s</span></div>
+          </div>
+        </div>
+
+         <!-- CARD 5: Local Alarm Status (Buzzer) - Spans 1 col, 1 row -->
+        <div id="card-alarm" class="bento-card accessory-tile">
+          <div class="tile-top">
+            <div class="tile-icon">
+              <i data-lucide="bell" id="buzzer-icon"></i>
+            </div>
+            <span id="buzzer-badge" class="badge-status inactive">Im lặng</span>
+          </div>
+          <div class="tile-body">
+            <div class="tile-value"><span id="buzzer-val">TẮT</span></div>
+            <div class="tile-desc" style="display: flex; justify-content: space-between; align-items: center;">
+              <span>Còi báo 5V</span>
+              <button id="btn-mute-buzzer" class="btn-mute" style="display: none;">Tắt còi</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- CARD 4: Energy Monitoring (ACS712) - Spans 2 cols, 1 row -->
+        <div id="card-power" class="bento-card accessory-tile span-2-cols">
+          <div class="tile-top">
+            <div class="tile-icon">
+              <i data-lucide="zap"></i>
+            </div>
+            <span class="badge-status normal" style="background: rgba(251, 191, 36, 0.05); color: var(--power); border: 1px solid rgba(251, 191, 36, 0.15); text-transform: uppercase;">
+              I: <span id="current-val">0.05</span>A
+            </span>
+          </div>
+          <div class="tile-body">
+            <div class="tile-value"><span id="power-val">11.0</span> <span style="font-size: 0.9rem; font-weight: 500; color: var(--text-secondary);">W</span></div>
+            <div class="tile-desc">Công suất lạnh • COP: <span id="efficiency-val">94</span>%</div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- DASHBOARD MIDDLE ROW (12 cols) -->
+        
+        <!-- Chart 1: Temp & Humidity - Spans 8 cols -->
+        <div class="chart-card glass span-8-cols">
+          <div class="chart-header">
+            <div class="chart-title-wrapper">
+              <i data-lucide="activity"></i>
+              <span class="chart-title">Biểu đồ nhiệt độ & độ ẩm thời gian thực</span>
+            </div>
+            <div class="chart-actions">
+              <button id="btn-chart-dht-clear" class="btn-chart-tab">Xóa dữ liệu</button>
+            </div>
+          </div>
+          <div class="chart-container">
+            <canvas id="dhtChart"></canvas>
+          </div>
+        </div>
+
+        <!-- Panel 1: Setting Thresholds - Spans 4 cols -->
+        <div class="panel-card glass span-4-cols">
+          <div class="panel-title">
+            <i data-lucide="sliders"></i>
+            <span>Thiết lập ngưỡng an toàn</span>
+          </div>
+          
+          <div class="settings-group">
+            <!-- Temp Max -->
+            <div class="setting-item">
+              <div class="setting-label-wrapper">
+                <span class="setting-name">Nhiệt độ tối đa</span>
+                <span id="thresh-temp-max-val" class="setting-value">8.0 °C</span>
+              </div>
+              <div class="slider-container">
+                <input type="range" id="thresh-temp-max" class="range-slider temp-slider" min="0" max="40" step="0.5" value="8.0">
+              </div>
+            </div>
+            
+            <!-- Temp Min -->
+            <div class="setting-item">
+              <div class="setting-label-wrapper">
+                <span class="setting-name">Nhiệt độ tối thiểu</span>
+                <span id="thresh-temp-min-val" class="setting-value">-2.0 °C</span>
+              </div>
+              <div class="slider-container">
+                <input type="range" id="thresh-temp-min" class="range-slider temp-slider" min="-20" max="10" step="0.5" value="-2.0">
+              </div>
+            </div>
+
+            <!-- Humidity Max -->
+            <div class="setting-item">
+              <div class="setting-label-wrapper">
+                <span class="setting-name">Độ ẩm tối đa</span>
+                <span id="thresh-hum-max-val" class="setting-value">85 %</span>
+              </div>
+              <div class="slider-container">
+                <input type="range" id="thresh-hum-max" class="range-slider hum-slider" min="50" max="100" step="1" value="85">
+              </div>
+            </div>
+
+            <!-- Humidity Min -->
+            <div class="setting-item">
+              <div class="setting-label-wrapper">
+                <span class="setting-name">Độ ẩm tối thiểu</span>
+                <span id="thresh-hum-min-val" class="setting-value">40 %</span>
+              </div>
+              <div class="slider-container">
+                <input type="range" id="thresh-hum-min" class="range-slider hum-slider" min="10" max="60" step="1" value="40">
+              </div>
+            </div>
+
+            <button id="btn-save-thresholds" class="btn-primary">
+              <i data-lucide="save"></i> Lưu cài đặt
+            </button>
+          </div>
+        </div>
+
+        <!-- Chart 2: Power and Energy - Spans 8 cols -->
+        <div class="chart-card glass span-8-cols">
+          <div class="chart-header">
+            <div class="chart-title-wrapper">
+              <i data-lucide="line-chart"></i>
+              <span class="chart-title">Lịch sử công suất tiêu thụ của thiết bị làm lạnh</span>
+            </div>
+            <div class="chart-actions">
+              <span style="font-size: 0.8rem; color: var(--text-secondary); margin-right: 1rem; align-self: center;">
+                Tổng điện năng: <strong id="energy-val" style="color: var(--power);">0.0001</strong> kWh
+              </span>
+              <button id="btn-chart-power-clear" class="btn-chart-tab">Xóa dữ liệu</button>
+            </div>
+          </div>
+          <div class="chart-container">
+            <canvas id="powerChart"></canvas>
+          </div>
+        </div>
+
+        <!-- Panel 2: Kết nối & Giả lập - Spans 4 cols -->
+        <div class="panel-card glass simulator-panel span-4-cols">
+          <div class="tabs-header" style="margin-bottom: 1rem;">
+            <button id="tab-btn-sim" class="tab-link active" style="font-size: 0.85rem; padding-bottom: 0.5rem; display: flex; align-items: center; gap: 0.25rem;">
+              <i data-lucide="cpu" style="width: 14px; height: 14px;"></i> Giả lập
+            </button>
+            <button id="tab-btn-real" class="tab-link" style="font-size: 0.85rem; padding-bottom: 0.5rem; display: flex; align-items: center; gap: 0.25rem;">
+              <i data-lucide="wifi" style="width: 14px; height: 14px;"></i> Thiết bị thật
+            </button>
+          </div>
+
+          <!-- Simulator Tab Content -->
+          <div id="tab-content-sim" class="tab-content active" style="display: flex; flex-direction: column; gap: 1rem;">
+            <!-- Simulated Temp -->
+            <div class="setting-item">
+              <div class="setting-label-wrapper">
+                <span>Nhiệt độ cảm biến (DHT22)</span>
+                <span id="sim-temp-val" style="color: var(--temp); font-weight: 600;">2.4 °C</span>
+              </div>
+              <input type="range" id="sim-temp" class="range-slider temp-slider" min="-10" max="25" step="0.1" value="2.4">
+            </div>
+
+            <!-- Simulated Humidity -->
+            <div class="setting-item">
+              <div class="setting-label-wrapper">
+                <span>Độ ẩm cảm biến (DHT22)</span>
+                <span id="sim-hum-val" style="color: var(--humidity); font-weight: 600;">62 %</span>
+              </div>
+              <input type="range" id="sim-hum" class="range-slider hum-slider" min="20" max="95" step="1" value="62">
+            </div>
+
+            <!-- Simulated Current -->
+            <div class="setting-item">
+              <div class="setting-label-wrapper">
+                <span>Dòng điện làm lạnh (ACS712)</span>
+                <span id="sim-current-val" style="color: var(--power); font-weight: 600;">0.05 A</span>
+              </div>
+              <input type="range" id="sim-current" class="range-slider" min="0" max="2.0" step="0.01" value="0.05">
+            </div>
+
+            <div class="sim-controls-grid">
+              <!-- Simulated Door -->
+              <div class="sim-control-item full-width">
+                <span class="sim-control-label">Cửa tủ (Từ NC)</span>
+                <button id="sim-btn-door" class="sim-btn-toggle" style="width: 100%;">
+                  <i data-lucide="door-closed"></i> Đang đóng
+                </button>
+              </div>
+
+              <!-- Auto Drifting Simulation -->
+              <div class="sim-control-item full-width">
+                <button id="sim-btn-auto" class="sim-btn-toggle active success-style" style="width: 100%;">
+                  <i data-lucide="refresh-cw" class="pulse"></i> Đang tự động biến động
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Real Device Tab Content -->
+          <div id="tab-content-real" class="tab-content" style="display: none; flex-direction: column; gap: 1rem;">
+            <p style="font-size: 0.8rem; color: var(--text-secondary); line-height: 1.4;">
+              Kết nối trực tiếp dashboard với IP của ESP32-C3 qua mạng Local WiFi. ESP32 cần chạy WebServer trả về dữ liệu JSON.
+            </p>
+            
+            <div class="setting-item">
+              <span class="setting-name">Địa chỉ IP ESP32</span>
+              <div style="display: flex; gap: 0.5rem; margin-top: 0.25rem;">
+                <input type="text" id="esp32-ip" style="flex: 1; font-family: monospace; font-size: 0.9rem;" placeholder="Ví dụ: 192.168.1.15" value="192.168.1.15">
+                <button id="btn-connect-real" class="btn-primary" style="padding: 0.5rem 1rem; font-size: 0.85rem; border-radius: 8px;">Kết nối</button>
+              </div>
+              <span id="real-conn-status" style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.25rem; display: block; word-break: break-all;">Chưa kết nối thiết bị thật.</span>
+            </div>
+
+            <div class="setting-item">
+              <span class="setting-name">Tần suất đồng bộ</span>
+              <select id="real-poll-rate" class="glass" style="margin-top: 0.25rem;">
+                <option value="1000">1 giây / lần</option>
+                <option value="2000" selected>2 giây / lần</option>
+                <option value="5000">5 giây / lần</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+      <!-- BOTTOM ROW: ALERT HISTORY & CODE INTEGRATION -->
+      <div class="bottom-row">
+        
+        <!-- Tab 1: Alert Logs -->
+        <div class="log-card glass">
+          <div class="chart-header">
+            <div class="chart-title-wrapper">
+              <i data-lucide="list-todo"></i>
+              <span class="chart-title">Lịch sử cảnh báo & sự kiện</span>
+            </div>
+            <button id="btn-clear-logs" class="btn-chart-tab">Xóa lịch sử</button>
+          </div>
+          <div class="log-table-wrapper">
+            <table class="log-table">
+              <thead>
+                <tr>
+                  <th>Thời gian</th>
+                  <th>Phân loại</th>
+                  <th>Sự kiện / Thông số</th>
+                  <th>Mức độ</th>
+                </tr>
+              </thead>
+              <tbody id="alert-log-tbody">
+                <!-- Log rows will be appended here -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Tab 2: Connection Guide & Hardware Code -->
+        <div class="code-card glass">
+          <div class="tabs-header">
+            <button id="tab-btn-code" class="tab-link active">Code ESP32 (Arduino)</button>
+            <button id="tab-btn-api" class="tab-link">Kết nối phần cứng (API)</button>
+          </div>
+
+          <!-- Code content -->
+          <div id="tab-content-code" class="tab-content active">
+            <div class="code-wrapper">
+              <div class="code-header">
+                <span class="code-lang">esp32_food_storage.ino</span>
+                <button id="btn-copy-code" class="btn-copy">
+                  <i data-lucide="copy" style="width: 14px; height: 14px;"></i> Copy code
+                </button>
+              </div>
+              <pre><code id="esp32-code-block">Loading code...</code></pre>
+            </div>
+          </div>
+
+          <!-- API Doc content -->
+          <div id="tab-content-api" class="tab-content">
+            <div class="api-doc">
+              <h4>Mô tả kết nối thiết bị</h4>
+              <p>ESP32-C3 kết nối qua WiFi và gửi dữ liệu thông số môi trường của tủ thực phẩm trực tiếp lên Dashboard này.</p>
+              
+              <h4>API Endpoint (HTTP POST)</h4>
+              <p>Mã nguồn ESP32 gửi dữ liệu dạng JSON thông qua phương thức POST:</p>
+              <code>POST http://[Dashboard_IP]/api/data</code>
+              
+              <h4>JSON Data Payload</h4>
+              <pre style="background: rgba(0,0,0,0.3); padding: 0.5rem; border-radius: 6px; font-family: monospace; font-size: 0.8rem; margin: 0.5rem 0; color: #cbd5e1;">
+{
+  "temp": 2.4,        // Nhiệt độ DHT22
+  "hum": 62,          // Độ ẩm DHT22
+  "door": 0,          // 0 = Đóng, 1 = Mở (Cảm biến từ NC)
+  "current": 0.05     // Dòng điện ACS712 (A)
+}</pre>
+
+              <h4>Cấu hình chân nối trên ESP32-C3</h4>
+              <table class="api-table">
+                <thead>
+                  <tr>
+                    <th>Linh kiện</th>
+                    <th>Chân nối ESP32</th>
+                    <th>Chức năng</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>DHT22</td>
+                    <td>GPIO 4</td>
+                    <td>Đọc Nhiệt độ / Độ ẩm</td>
+                  </tr>
+                  <tr>
+                    <td>Cảm biến từ NC</td>
+                    <td>GPIO 5 (PULLUP)</td>
+                    <td>Đóng / Mở cửa tủ</td>
+                  </tr>
+
+                  <tr>
+                    <td>ACS712</td>
+                    <td>GPIO 2 (ADC)</td>
+                    <td>Đo dòng điện làm lạnh</td>
+                  </tr>
+                  <tr>
+                    <td>Còi Buzzer 5V</td>
+                    <td>GPIO 7</td>
+                    <td>Báo động tại chỗ (HIGH = Kêu)</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+        </div>
+
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <!-- Main Application Logic -->
+  <script src="app.js"></script>
+</body>
+</html>
