@@ -886,7 +886,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 1800); // abort if taking too long
       
-      fetch(`http://${ip}/data`, { signal: controller.signal })
+      fetch(`http://${ip}/data?buzzer=${state.buzzer}`, { signal: controller.signal })
         .then(response => {
           clearTimeout(timeoutId);
           if (!response.ok) throw new Error('API response error');
@@ -1014,122 +1014,135 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // --- Setup Copy Code Function ---
   const esp32CodeStr = `#include <WiFi.h>
+#include <DNSServer.h>
 #include <WebServer.h>
-#include <DHT.h>
+#include <WiFiManager.h> // Thêm thư viện WiFiManager
+#include "DHT.h"
 
-// 1. Cấu hình mạng WiFi (Địa chỉ Local)
-const char* ssid = "Tên_WiFi_Của_Bạn";
-const char* password = "Mật_Khẩu_WiFi";
+// --- KHÔNG THAY ĐỔI CẤU HÌNH CHÂN KẾT NỐI VẬT LÝ CỦA BẠN ---
+#define DHTPIN 2          
+#define DHTTYPE DHT22     
+#define DOOR_PIN 3        
+#define RELAY_PIN 5       
+#define ACS_PIN 0         
 
-// Khởi tạo WebServer cổng 80
-WebServer server(80);
-
-// 2. Định nghĩa các chân cắm linh kiện (Cho ESP32-C3)
-#define DHTPIN 4         // DHT22 cảm biến nhiệt độ & độ ẩm
-#define DHTTYPE DHT22
-#define DOOR_PIN 5       // Cảm biến từ NC (LOW=Đóng, HIGH=Mở khi kéo nội trở pullup)
-#define ACS_PIN 2        // Cảm biến dòng điện ACS712 (Chân ADC)
-#define BUZZER_PIN 7     // Còi báo động Buzzer 5V
+#define RELAY_ON  HIGH
+#define RELAY_OFF LOW
 
 DHT dht(DHTPIN, DHTTYPE);
+WebServer server(80); // Khởi tạo WebServer cổng 80
 
-// Cấu hình thông số ADC cho cảm biến ACS712 5A
-const float VCC_REF = 3.3;          // ESP32 ADC tham chiếu 3.3V
-const int ADC_RES = 4096;           // Độ phân giải ADC 12-bit
-const float SENSITIVITY = 185.0;    // Độ nhạy ACS712 5A là 185mV/A
-const float OFFSET_V = 1.65;        // Điện áp tại 0A (VCC / 2)
+// Biến lưu thông số cảm biến để gửi lên Web Dashboard
+float temperature = 0.0;
+float humidity = 0.0;
+int doorState = LOW;
+float currentVal = 0.0;
 
-// Khai báo biến lưu trạng thái cảm biến toàn cục
-float temp = 0.0;
-float hum = 0.0;
-int doorState = 0;
-float current = 0.0;
+unsigned long previousMillis = 0;
+const long interval = 2000; 
+
+// Hàm xử lý API Endpoint /data trả về JSON cho Dashboard
+void handleDataEndpoint() {
+  // Nhận lệnh tắt/bật còi báo động từ giao diện Web
+  if (server.hasArg("buzzer")) {
+    int buzzerArg = server.arg("buzzer").toInt();
+    digitalWrite(RELAY_PIN, buzzerArg ? RELAY_ON : RELAY_OFF);
+  }
+  
+  // Trả về JSON (Cửa tủ: HIGH = Mở = 1, LOW = Đóng = 0)
+  String json = "{\\n";
+  json += "  \\"temp\\": " + String(temperature, 1) + ",\\n";
+  json += "  \\"hum\\": " + String(humidity, 0) + ",\\n";
+  json += "  \\"door\\": " + String(doorState == HIGH ? 1 : 0) + ",\\n";
+  json += "  \\"current\\": " + String(currentVal, 3) + "\\n";
+  json += "}";
+  
+  server.sendHeader("Access-Control-Allow-Origin", "*"); // CORS Header cho phép trình duyệt truy cập
+  server.send(200, "application/json", json);
+}
 
 void setup() {
   Serial.begin(115200);
-  dht.begin();
-  
-  pinMode(DOOR_PIN, INPUT_PULLUP); // Cảm biến từ NC dùng pullup nội
-  pinMode(BUZZER_PIN, OUTPUT);
-  digitalWrite(BUZZER_PIN, LOW);   // Tắt còi ban đầu
-  
-  // Kết nối WiFi
-  WiFi.begin(ssid, password);
-  Serial.print("Connecting to WiFi...");
-  while (WiFi.status() != WL_CONNECTED) {
-    delay(500);
-    Serial.print(".");
-  }
-  Serial.println("");
-  Serial.println("WiFi connected successfully!");
-  Serial.print("ESP32 IP Address: ");
-  Serial.println(WiFi.localIP());
+  delay(1000);
+  Serial.println("\n====== KHỞI ĐỘNG HỆ THỐNG ======");
 
-  // Định nghĩa API Endpoint /data trả về JSON cho Dashboard
-  server.on("/data", HTTP_GET, []() {
-    // Đọc trạng thái còi báo động từ yêu cầu GET nếu có (Dùng đồng bộ còi)
-    if (server.hasArg("buzzer")) {
-      int buzzVal = server.arg("buzzer").toInt();
-      digitalWrite(BUZZER_PIN, buzzVal ? HIGH : LOW);
-    }
-    
-    // Tạo chuỗi JSON gửi ngược lên Trình duyệt (Có header CORS để trình duyệt không chặn)
-    String json = "{\\n";
-    json += "  \\"temp\\": " + String(temp, 1) + ",\\n";
-    json += "  \\"hum\\": " + String(hum, 0) + ",\\n";
-    json += "  \\"door\\": " + String(doorState) + ",\\n";
-    json += "  \\"current\\": " + String(current, 3) + "\\n";
-    json += "}";
-    
-    server.sendHeader("Access-Control-Allow-Origin", "*"); // Rất quan trọng! Cho phép CORS
-    server.send(200, "application/json", json);
-  });
+  // Khởi tạo các cảm biến và relay
+  dht.begin();
+  pinMode(DOOR_PIN, INPUT_PULLUP); 
+  pinMode(RELAY_PIN, OUTPUT);
+  digitalWrite(RELAY_PIN, RELAY_OFF);
+
+  // KẾT NỐI WI-FI QUA WIFIMANAGER
+  WiFiManager wm;
+  wm.setConfigPortalTimeout(180); 
   
+  if (!wm.autoConnect("ESP32_QuanLyThucPham")) {
+    Serial.println("Kết nối thất bại hoặc hết thời gian chờ cấu hình. Đang khởi động lại ESP...");
+    delay(3000);
+    ESP.restart();
+  }
+
+  // Kết nối thành công
+  Serial.println("");
+  Serial.println("🎉 ĐÃ KẾT NỐI WI-FI THÀNH CÔNG!");
+  Serial.print("Địa chỉ IP của ESP32: ");
+  Serial.println(WiFi.localIP());
+  Serial.println("=================================================");
+
+  // Khởi chạy WebServer
+  server.on("/data", HTTP_GET, handleDataEndpoint);
   server.begin();
-  Serial.println("HTTP WebServer started.");
+  Serial.println("HTTP WebServer đã khởi chạy thành công.");
 }
 
 void loop() {
-  server.handleClient(); // Xử lý các kết nối HTTP từ dashboard
-  
-  // Đọc thông số cảm biến định kỳ mỗi 2 giây
-  static unsigned long lastRead = 0;
-  if (millis() - lastRead > 2000) {
-    lastRead = millis();
-    
-    temp = dht.readTemperature();
-    hum = dht.readHumidity();
-    doorState = digitalRead(DOOR_PIN); // 0=Đóng, 1=Mở (Nhờ Pullup)
-    
-    // Đọc ACS712 đo dòng điện (lọc nhiễu trung bình 500 mẫu)
-    current = readACS712(500);
-    
-    // In ra Serial Debug
-    Serial.printf("T: %.1fC | H: %.0f%% | Door: %s | I: %.3fA\\n", 
-                  temp, hum, 
-                  (doorState == 0 ? "Closed" : "Open"),
-                  current);
-  }
-}
+  server.handleClient(); // Xử lý các yêu cầu kết nối từ Web Dashboard
 
-// Hàm đọc và tính toán dòng điện xoay chiều/một chiều của ACS712
-float readACS712(int samples) {
-  long adcSum = 0;
-  for (int i = 0; i < samples; i++) {
-    adcSum += analogRead(ACS_PIN);
-    delayMicroseconds(50);
+  unsigned long currentMillis = millis();
+  doorState = digitalRead(DOOR_PIN);
+
+  if (currentMillis - previousMillis >= interval) {
+    previousMillis = currentMillis;
+
+    humidity = dht.readHumidity();
+    temperature = dht.readTemperature();
+
+    // Đọc ADC từ ACS712 và tính toán dòng điện (Ampe)
+    float avgADC = 0;
+    for(int i = 0; i < 20; i++) {
+      avgADC += analogRead(ACS_PIN);
+      delay(1);
+    }
+    avgADC = avgADC / 20.0;
+
+    // Chuyển đổi giá trị ADC thành dòng điện thực tế (chỉnh offset & độ nhạy của ACS712)
+    float adcVolt = (avgADC / 4095.0) * 3.3;
+    currentVal = (adcVolt - 1.65) / 0.185; // Cảm biến ACS712 5A (Độ nhạy 185mV/A, offset 1.65V)
+    if (currentVal < 0.02) {
+      currentVal = 0.0; // Lọc bỏ nhiễu dòng điện nhỏ
+    }
+
+    Serial.println("\\n--- THÔNG SỐ HỆ THỐNG ---");
+    if (isnan(humidity) || isnan(temperature)) {
+      Serial.println("❌ Lỗi: Không đọc được dữ liệu từ DHT22!");
+    } else {
+      Serial.print("🌡️ Nhiệt độ: "); Serial.print(temperature, 1); Serial.println(" °C");
+      Serial.print("💧 Độ ẩm: "); Serial.print(humidity, 1); Serial.println(" %");
+    }
+
+    Serial.print("🚪 Cửa tủ: "); 
+    Serial.println((doorState == HIGH) ? "ĐANG MỞ 🔓" : "ĐÃ ĐÓNG 🔒");
+    Serial.print("⚡ Dòng điện: "); Serial.print(currentVal, 3); Serial.println(" A");
+    Serial.print("📡 Wi-Fi hiện tại: "); Serial.println(WiFi.SSID());
+    Serial.println("-------------------------");
+
+    // Kịch bản kêu còi tại chỗ khi cửa mở
+    if (doorState == HIGH) {
+      digitalWrite(RELAY_PIN, RELAY_ON);
+      delay(300); 
+      digitalWrite(RELAY_PIN, RELAY_OFF);
+    }
   }
-  float avgAdc = (float)adcSum / samples;
-  float adcVolt = (avgAdc / ADC_RES) * VCC_REF;
-  
-  // Tính dòng điện: I = (V_adc - V_offset) / Sensitivity_Volt
-  float currentAmp = (adcVolt - OFFSET_V) / (SENSITIVITY / 1000.0);
-  
-  // Lọc bỏ nhiễu dòng điện nhỏ vô hại
-  if (abs(currentAmp) < 0.015) {
-    currentAmp = 0.0;
-  }
-  return abs(currentAmp);
 }`;
 
   esp32CodeBlock.textContent = esp32CodeStr;
