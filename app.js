@@ -1137,12 +1137,8 @@ void loop() {
     Serial.print("🌐 Địa chỉ IP ESP32: "); Serial.println(WiFi.localIP());
     Serial.println("-------------------------");
 
-    // Kịch bản kêu còi tại chỗ khi cửa mở
-    if (doorState == HIGH) {
-      digitalWrite(RELAY_PIN, RELAY_ON);
-      delay(300); 
-      digitalWrite(RELAY_PIN, RELAY_OFF);
-    }
+    // Còi báo động vật lý (Buzzer) bây giờ sẽ do Web Dashboard điều khiển hoàn toàn
+    // nhằm đảm bảo các nút "Tắt còi" và nút "Tắt âm thanh" hoạt động chính xác.
   }
 }`;
 
