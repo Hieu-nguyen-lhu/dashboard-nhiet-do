@@ -135,13 +135,13 @@ document.addEventListener('DOMContentLoaded', () => {
       try {
         const parsed = JSON.parse(saved);
         thresholds = { ...thresholds, ...parsed };
-        
+
         // Update slider values
         threshTempMax.value = thresholds.tempMax;
         threshTempMin.value = thresholds.tempMin;
         threshHumMax.value = thresholds.humMax;
         threshHumMin.value = thresholds.humMin;
-        
+
         // Update UI Labels
         threshTempMaxVal.textContent = `${thresholds.tempMax.toFixed(1)} °C`;
         threshTempMinVal.textContent = `${thresholds.tempMin.toFixed(1)} °C`;
@@ -151,7 +151,7 @@ document.addEventListener('DOMContentLoaded', () => {
         console.error('Error loading thresholds from localStorage', e);
       }
     }
-    
+
     // Set labels on stat cards
     tempMinLbl.textContent = thresholds.tempMin.toFixed(1);
     tempMaxLbl.textContent = thresholds.tempMax.toFixed(1);
@@ -168,7 +168,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const dd = String(now.getDate()).padStart(2, '0');
     const mo = String(now.getMonth() + 1).padStart(2, '0');
     const yyyy = now.getFullYear();
-    
+
     timeDisplay.textContent = `${hh}:${mm}:${ss} | ${dd}/${mo}/${yyyy}`;
   }
   setInterval(updateClock, 1000);
@@ -177,7 +177,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // --- Sound Alert System ---
   function updateAlarmAudio() {
     const isAlarming = Object.values(activeAlarms).some(v => v === true);
-    
+
     if (isAlarming && state.buzzer === 1 && soundEnabled && !isMutedManually) {
       if (alarmSound.paused) {
         alarmSound.play().catch(e => console.log("Audio play blocked by browser. Interact with page first.", e));
@@ -199,13 +199,13 @@ document.addEventListener('DOMContentLoaded', () => {
       alarmSound.pause();
     }
     lucide.createIcons();
+    checkBuzzerState();
   });
 
   btnMuteBuzzer.addEventListener('click', () => {
     isMutedManually = true;
-    btnMuteBuzzer.style.display = 'none';
-    alarmSound.pause();
     logEvent('BUZZER', 'Còi báo động đã được tắt âm bằng tay bởi người dùng.', 'info');
+    checkBuzzerState();
   });
 
   // --- Notification Toast & Alert Banners ---
@@ -222,9 +222,9 @@ document.addEventListener('DOMContentLoaded', () => {
       toast.style.background = 'rgba(251, 191, 36, 0.2)';
       toast.style.borderColor = 'var(--power)';
     }
-    
+
     const icon = type === 'critical' ? 'shield-alert' : (type === 'success' ? 'check-circle' : 'info');
-    
+
     toast.innerHTML = `
       <div class="alert-content">
         <i data-lucide="${icon}"></i>
@@ -232,15 +232,15 @@ document.addEventListener('DOMContentLoaded', () => {
       </div>
       <button class="alert-close">&times;</button>
     `;
-    
+
     activeAlertsContainer.appendChild(toast);
     lucide.createIcons();
-    
+
     // Close button event
     toast.querySelector('.alert-close').addEventListener('click', () => {
       toast.remove();
     });
-    
+
     // Auto remove after 6 seconds
     setTimeout(() => {
       if (toast.parentNode) {
@@ -254,22 +254,22 @@ document.addEventListener('DOMContentLoaded', () => {
   function logEvent(type, detail, severity = 'info') {
     const now = new Date();
     const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
-    
+
     const tr = document.createElement('tr');
-    
+
     let badgeClass = 'info';
     if (severity === 'critical') badgeClass = 'crit';
     if (severity === 'warning') badgeClass = 'warn';
-    
+
     tr.innerHTML = `
       <td>${timeStr}</td>
       <td><span class="log-badge ${badgeClass}">${type}</span></td>
       <td>${detail}</td>
       <td>${severity.toUpperCase()}</td>
     `;
-    
+
     alertLogTbody.prepend(tr);
-    
+
     // Limit log rows to 100
     if (alertLogTbody.rows.length > 100) {
       alertLogTbody.deleteRow(alertLogTbody.rows.length - 1);
@@ -377,7 +377,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (data2 !== null) {
       chart.data.datasets[1].data.push(data2);
     }
-    
+
     // Keep max 25 data points
     if (chart.data.labels.length > 25) {
       chart.data.labels.shift();
@@ -410,11 +410,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const voltage = 220.0; // Standard Household Voltage
     state.current = newData.current;
     state.power = state.current * voltage; // P = U*I (assumed resistive load/heating/cooling Peltier for simple display)
-    
+
     const nowTime = Date.now();
     const durationHrs = (nowTime - lastEnergyUpdateTime) / (1000 * 60 * 60);
     lastEnergyUpdateTime = nowTime;
-    
+
     state.energy += (state.power / 1000) * durationHrs; // kWh
 
     state.temp = newData.temp;
@@ -431,7 +431,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Update climate horizontal progress bars
     const tempPercent = Math.max(0, Math.min(100, ((state.temp - thresholds.tempMin) / (thresholds.tempMax - thresholds.tempMin)) * 100));
     const humPercent = Math.max(0, Math.min(100, ((state.hum - thresholds.humMin) / (thresholds.humMax - thresholds.humMin)) * 100));
-    
+
     const tempBar = document.getElementById('temp-bar');
     const humBar = document.getElementById('humidity-bar');
     if (tempBar) tempBar.style.width = tempPercent + '%';
@@ -444,16 +444,17 @@ document.addEventListener('DOMContentLoaded', () => {
       doorVal.style.color = 'var(--danger)';
       doorIcon.setAttribute('data-lucide', 'door-open');
       doorIcon.style.color = 'var(--danger)';
-      
+
       // Start door timer if not already running
       if (!doorOpenTimer) {
         doorOpenSeconds = 0;
         doorOpenTimer = setInterval(() => {
           doorOpenSeconds++;
           doorTimer.textContent = `${doorOpenSeconds} giây`;
-          
+
           if (doorOpenSeconds >= 10 && !activeAlarms.doorOpenTooLong) {
             activeAlarms.doorOpenTooLong = true;
+            isMutedManually = false;
             cardDoor.classList.add('warning-glow');
             doorBadge.textContent = 'Mở quá lâu!';
             doorBadge.className = 'badge-status warning pulse-danger';
@@ -469,7 +470,7 @@ document.addEventListener('DOMContentLoaded', () => {
       doorVal.style.color = 'var(--success)';
       doorIcon.setAttribute('data-lucide', 'door-closed');
       doorIcon.style.color = 'var(--success)';
-      
+
       if (doorOpenTimer) {
         clearInterval(doorOpenTimer);
         doorOpenTimer = null;
@@ -477,7 +478,7 @@ document.addEventListener('DOMContentLoaded', () => {
       doorOpenSeconds = 0;
       doorTimer.textContent = '0 giây';
       cardDoor.classList.remove('warning-glow');
-      
+
       if (activeAlarms.doorOpenTooLong) {
         activeAlarms.doorOpenTooLong = false;
         doorBadge.textContent = 'An toàn';
@@ -492,6 +493,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (state.temp > thresholds.tempMax) {
       if (!activeAlarms.tempHigh) {
         activeAlarms.tempHigh = true;
+        isMutedManually = false;
         cardTemp.classList.add('warning-glow');
         logEvent('NHIỆT ĐỘ', `Nhiệt độ vượt quá mức tối đa cho phép: ${state.temp.toFixed(1)}°C > ${thresholds.tempMax.toFixed(1)}°C`, 'critical');
         triggerToast(`Nhiệt độ vượt quá mức tối đa: ${state.temp.toFixed(1)} °C`, 'critical');
@@ -507,6 +509,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (state.temp < thresholds.tempMin) {
       if (!activeAlarms.tempLow) {
         activeAlarms.tempLow = true;
+        isMutedManually = false;
         cardTemp.classList.add('warning-glow');
         logEvent('NHIỆT ĐỘ', `Nhiệt độ dưới mức tối thiểu cho phép: ${state.temp.toFixed(1)}°C < ${thresholds.tempMin.toFixed(1)}°C`, 'critical');
         triggerToast(`Nhiệt độ dưới mức tối thiểu: ${state.temp.toFixed(1)} °C`, 'critical');
@@ -524,6 +527,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (state.hum > thresholds.humMax) {
       if (!activeAlarms.humHigh) {
         activeAlarms.humHigh = true;
+        isMutedManually = false;
         cardHumidity.classList.add('warning-glow');
         logEvent('ĐỘ ẨM', `Độ ẩm vượt quá mức tối đa cho phép: ${state.hum.toFixed(0)}% > ${thresholds.humMax}%`, 'critical');
         triggerToast(`Độ ẩm vượt quá mức tối đa: ${state.hum.toFixed(0)} %`, 'critical');
@@ -539,6 +543,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (state.hum < thresholds.humMin) {
       if (!activeAlarms.humLow) {
         activeAlarms.humLow = true;
+        isMutedManually = false;
         cardHumidity.classList.add('warning-glow');
         logEvent('ĐỘ ẨM', `Độ ẩm dưới mức tối thiểu cho phép: ${state.hum.toFixed(0)}% < ${thresholds.humMin}%`, 'critical');
         triggerToast(`Độ ẩm dưới mức tối thiểu: ${state.hum.toFixed(0)} %`, 'critical');
@@ -569,16 +574,16 @@ document.addEventListener('DOMContentLoaded', () => {
     const targetTemp = (thresholds.tempMax + thresholds.tempMin) / 2;
     const tempRange = thresholds.tempMax - thresholds.tempMin;
     const tempDev = Math.abs(state.temp - targetTemp);
-    
+
     // Performance starts at 100%
     let perf = 100;
-    
+
     // Deduct points based on temperature deviation
     if (tempRange > 0) {
       const devRatio = tempDev / (tempRange / 2); // 1.0 means it is exactly on the limit
       perf -= devRatio * 40; // max deduction of 40% for reaching temp limit
     }
-    
+
     // Deduct for humidity deviation
     const targetHum = (thresholds.humMax + thresholds.humMin) / 2;
     const humRange = thresholds.humMax - thresholds.humMin;
@@ -587,7 +592,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const devRatio = humDev / (humRange / 2);
       perf -= devRatio * 20;
     }
-    
+
     // Deduct for door left open
     if (state.door === 1) {
       perf -= 15; // Instant 15% drop if open
@@ -595,11 +600,11 @@ document.addEventListener('DOMContentLoaded', () => {
         perf -= Math.min(25, (doorOpenSeconds - 10) * 1.5); // progressively drop as door stays open
       }
     }
-    
+
     // Clamp to 10 - 100%
     state.efficiency = Math.round(Math.max(10, Math.min(100, perf)));
     efficiencyVal.textContent = state.efficiency;
-    
+
     // Color performance indicator
     if (state.efficiency >= 85) {
       efficiencyVal.style.color = 'var(--success)';
@@ -615,7 +620,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // 8. Push to Charts
     const now = new Date();
     const timeLbl = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
-    
+
     addChartData(dhtChart, timeLbl, state.temp, state.hum);
     addChartData(powerChart, timeLbl, state.power);
 
@@ -623,10 +628,32 @@ document.addEventListener('DOMContentLoaded', () => {
     lucide.createIcons();
   }
 
+  function sendBuzzerStateToESP32() {
+    if (isSimulated) return;
+    const ip = esp32Ip.value.trim();
+    if (!ip) return;
+
+    fetch(`http://${ip}/data?buzzer=${state.buzzer}`)
+      .then(response => {
+        if (response.ok) {
+          logEvent('BUZZER', `Đã đồng bộ trạng thái còi (${state.buzzer === 1 ? 'BẬT' : 'TẮT'}) tới ESP32 thành công.`, 'info');
+        }
+      })
+      .catch(err => console.error('Error sending immediate buzzer command:', err));
+  }
+
   function checkBuzzerState() {
     const shouldAlarm = Object.values(activeAlarms).some(v => v === true);
-    
-    if (shouldAlarm) {
+
+    // Determine if the physical buzzer (relay) should be active
+    let physicalBuzzerOn = false;
+    if (soundEnabled && shouldAlarm && !isMutedManually) {
+      physicalBuzzerOn = true;
+    }
+
+    const previousBuzzerState = state.buzzer;
+
+    if (physicalBuzzerOn) {
       state.buzzer = 1;
       buzzerVal.textContent = 'BẬT';
       buzzerVal.style.color = 'var(--danger)';
@@ -636,12 +663,8 @@ document.addEventListener('DOMContentLoaded', () => {
       buzzerBadge.textContent = 'ĐANG CẢNH BÁO';
       buzzerBadge.className = 'badge-status warning pulse-danger';
       cardAlarm.classList.add('warning-glow');
-      
-      if (soundEnabled && !isMutedManually) {
-        btnMuteBuzzer.style.display = 'block';
-      } else {
-        btnMuteBuzzer.style.display = 'none';
-      }
+
+      btnMuteBuzzer.style.display = 'block';
     } else {
       state.buzzer = 0;
       buzzerVal.textContent = 'TẮT';
@@ -649,21 +672,35 @@ document.addEventListener('DOMContentLoaded', () => {
       buzzerIcon.setAttribute('data-lucide', 'bell');
       buzzerIcon.style.color = '';
       buzzerIcon.classList.remove('pulse-danger');
-      buzzerBadge.textContent = 'Im lặng';
-      buzzerBadge.className = 'badge-status inactive';
+
+      if (shouldAlarm && isMutedManually) {
+        buzzerBadge.textContent = 'Đã tắt tạm thời';
+        buzzerBadge.className = 'badge-status warning';
+      } else {
+        buzzerBadge.textContent = 'Im lặng';
+        buzzerBadge.className = 'badge-status inactive';
+      }
+
       cardAlarm.classList.remove('warning-glow');
       btnMuteBuzzer.style.display = 'none';
-      isMutedManually = false; // Reset manual mute when alarm resolves
+
+      if (!shouldAlarm) {
+        isMutedManually = false; // Reset manual mute when alarm resolves
+      }
     }
-    
+
     updateAlarmAudio();
+
+    if (state.buzzer !== previousBuzzerState) {
+      sendBuzzerStateToESP32();
+    }
   }
 
   // --- Threshold Settings Sliders Event Handlers ---
   threshTempMax.addEventListener('input', (e) => {
     const val = parseFloat(e.target.value);
     threshTempMaxVal.textContent = `${val.toFixed(1)} °C`;
-    
+
     // Limit min check to avoid crossover
     if (val <= parseFloat(threshTempMin.value)) {
       threshTempMin.value = (val - 1.0).toFixed(1);
@@ -674,7 +711,7 @@ document.addEventListener('DOMContentLoaded', () => {
   threshTempMin.addEventListener('input', (e) => {
     const val = parseFloat(e.target.value);
     threshTempMinVal.textContent = `${val.toFixed(1)} °C`;
-    
+
     // Limit max check to avoid crossover
     if (val >= parseFloat(threshTempMax.value)) {
       threshTempMax.value = (val + 1.0).toFixed(1);
@@ -685,7 +722,7 @@ document.addEventListener('DOMContentLoaded', () => {
   threshHumMax.addEventListener('input', (e) => {
     const val = parseInt(e.target.value);
     threshHumMaxVal.textContent = `${val} %`;
-    
+
     if (val <= parseInt(threshHumMin.value)) {
       threshHumMin.value = val - 5;
       threshHumMinVal.textContent = `${val - 5} %`;
@@ -695,7 +732,7 @@ document.addEventListener('DOMContentLoaded', () => {
   threshHumMin.addEventListener('input', (e) => {
     const val = parseInt(e.target.value);
     threshHumMinVal.textContent = `${val} %`;
-    
+
     if (val >= parseInt(threshHumMax.value)) {
       threshHumMax.value = val + 5;
       threshHumMaxVal.textContent = `${val + 5} %`;
@@ -707,18 +744,18 @@ document.addEventListener('DOMContentLoaded', () => {
     thresholds.tempMin = parseFloat(threshTempMin.value);
     thresholds.humMax = parseInt(threshHumMax.value);
     thresholds.humMin = parseInt(threshHumMin.value);
-    
+
     localStorage.setItem('food_storage_thresholds', JSON.stringify(thresholds));
-    
+
     // Update dashboard stat card footers
     tempMinLbl.textContent = thresholds.tempMin.toFixed(1);
     tempMaxLbl.textContent = thresholds.tempMax.toFixed(1);
     humidityMinLbl.textContent = thresholds.humMin;
     humidityMaxLbl.textContent = thresholds.humMax;
-    
+
     logEvent('CẤU HÌNH', `Đã lưu cài đặt ngưỡng an toàn: Temp [${thresholds.tempMin}, ${thresholds.tempMax}]°C | Hum [${thresholds.humMin}, ${thresholds.humMax}]%`, 'info');
     triggerToast('Cấu hình ngưỡng an toàn đã được lưu!', 'success');
-    
+
     // Force recheck on current data with new thresholds
     updateDeviceData({
       temp: state.temp,
@@ -754,7 +791,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   simBtnDoor.addEventListener('click', () => {
     simBtnDoor.classList.toggle('active');
-    
+
     const isOpen = simBtnDoor.classList.contains('active');
     if (isOpen) {
       simBtnDoor.innerHTML = '<i data-lucide="door-open"></i> Đang mở';
@@ -764,7 +801,7 @@ document.addEventListener('DOMContentLoaded', () => {
       logEvent('GIẢ LẬP', 'Đã mô phỏng đóng cửa tủ thực phẩm.', 'info');
     }
     lucide.createIcons();
-    
+
     if (isSimulated) {
       updateDeviceData({
         temp: parseFloat(simTemp.value),
@@ -791,14 +828,14 @@ document.addEventListener('DOMContentLoaded', () => {
   // --- Auto Drift Logic (Simulating live drift data) ---
   function startAutoDrift() {
     if (autoDriftInterval) clearInterval(autoDriftInterval);
-    
+
     autoDriftInterval = setInterval(() => {
       if (!isSimulated || !autoDriftActive) return;
-      
+
       // Random walk for values
       let newTemp = parseFloat(simTemp.value) + (Math.random() - 0.5) * 0.4;
       let newHum = parseInt(simHum.value) + Math.round((Math.random() - 0.5) * 2);
-      
+
       // Assumed compressor activity (current increases when temp is high, drops when cool)
       const targetComfort = (thresholds.tempMax + thresholds.tempMin) / 2;
       let currentBase = 0.05; // Base passive power
@@ -813,28 +850,28 @@ document.addEventListener('DOMContentLoaded', () => {
         // Warm up slowly due to ambient temperature
         newTemp += 0.08;
       }
-      
+
       let newCurrent = currentBase + (Math.random() - 0.5) * 0.05;
       if (newCurrent < 0) newCurrent = 0;
-      
+
       // Clamp simulated values to reasonable numbers
       newTemp = Math.max(-8, Math.min(22, newTemp));
       newHum = Math.max(30, Math.min(95, newHum));
       newCurrent = Math.max(0, Math.min(1.8, newCurrent));
-      
+
       // Feed to sliders
       simTemp.value = newTemp.toFixed(1);
       simHum.value = newHum;
       simCurrent.value = newCurrent.toFixed(2);
-      
+
       updateSimLabels();
-      
+
       // Trigger random events occasionally
       // 2% chance of door opening automatically if it is currently closed
       const isDoorOpen = simBtnDoor.classList.contains('active');
       if (!isDoorOpen && Math.random() < 0.02) {
         simBtnDoor.click(); // Open the door
-        
+
         // Schedule it to close after 6 seconds
         setTimeout(() => {
           if (simBtnDoor.classList.contains('active')) {
@@ -849,21 +886,21 @@ document.addEventListener('DOMContentLoaded', () => {
         door: simBtnDoor.classList.contains('active') ? 1 : 0,
         current: newCurrent
       });
-      
+
     }, 2000);
   }
 
   // --- Real Device Network Polling ---
   function startRealDevicePolling() {
     if (realDeviceInterval) clearInterval(realDeviceInterval);
-    
+
     const ip = esp32Ip.value.trim();
     if (!ip) {
       realConnStatus.textContent = 'IP không được trống!';
       realConnStatus.style.color = 'var(--danger)';
       return;
     }
-    
+
     // Basic IP validation regex
     const ipPattern = /^(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/;
     if (!ipPattern.test(ip)) {
@@ -871,21 +908,21 @@ document.addEventListener('DOMContentLoaded', () => {
       realConnStatus.style.color = 'var(--danger)';
       return;
     }
-    
+
     const rate = parseInt(realPollRate.value);
     realConnStatus.textContent = `Đang kết nối tới http://${ip}/data...`;
     realConnStatus.style.color = 'var(--info)';
-    
+
     // Set Header Status to warning/connecting
     connectionStatus.className = 'connection-badge disconnected';
     connectionText.textContent = 'Kết nối thực...';
-    
+
     let failureCount = 0;
-    
+
     const pollFunc = () => {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 1800); // abort if taking too long
-      
+
       fetch(`http://${ip}/data?buzzer=${state.buzzer}`, { signal: controller.signal })
         .then(response => {
           clearTimeout(timeoutId);
@@ -894,7 +931,7 @@ document.addEventListener('DOMContentLoaded', () => {
         })
         .then(jsonData => {
           failureCount = 0;
-          
+
           // Switch to real mode if successful
           if (isSimulated) {
             isSimulated = false;
@@ -903,10 +940,10 @@ document.addEventListener('DOMContentLoaded', () => {
             logEvent('KẾT NỐI', `Thiết bị thực tại IP ${ip} đã trực tiếp đồng bộ dữ liệu thành công.`, 'info');
             triggerToast('Đã kết nối thiết bị thực thành công!', 'success');
           }
-          
+
           realConnStatus.textContent = `Đồng bộ lúc: ${new Date().toLocaleTimeString()} (Tốt)`;
           realConnStatus.style.color = 'var(--success)';
-          
+
           // Feed ESP32 data into dashboard
           updateDeviceData({
             temp: parseFloat(jsonData.temp),
@@ -919,16 +956,16 @@ document.addEventListener('DOMContentLoaded', () => {
           clearTimeout(timeoutId);
           failureCount++;
           console.error('Fetch error:', err);
-          
+
           realConnStatus.textContent = `Lỗi kết nối (${failureCount} lần): Không thể truy cập http://${ip}/data. Vui lòng kiểm tra địa chỉ IP ESP32 và đảm bảo ESP32 bật WebServer hỗ trợ CORS.`;
           realConnStatus.style.color = 'var(--danger)';
-          
+
           // If already in connected mode, degrade to disconnected
           if (!isSimulated) {
             connectionStatus.className = 'connection-badge disconnected';
             connectionText.textContent = 'Lỗi kết nối';
           }
-          
+
           if (failureCount >= 3 && !isSimulated) {
             // Revert back to simulator to keep the dashboard working
             revertToSimulator();
@@ -937,13 +974,13 @@ document.addEventListener('DOMContentLoaded', () => {
           }
         });
     };
-    
+
     // Poll immediately
     pollFunc();
     // Start interval
     realDeviceInterval = setInterval(pollFunc, rate);
   }
-  
+
   function revertToSimulator() {
     isSimulated = true;
     if (realDeviceInterval) {
@@ -977,7 +1014,7 @@ document.addEventListener('DOMContentLoaded', () => {
     tabContentSim.style.display = 'flex';
     tabContentReal.classList.remove('active');
     tabContentReal.style.display = 'none';
-    
+
     revertToSimulator();
     logEvent('HỆ THỐNG', 'Chuyển sang chế độ GIẢ LẬP số liệu.', 'info');
   });
@@ -989,7 +1026,7 @@ document.addEventListener('DOMContentLoaded', () => {
     tabContentReal.style.display = 'flex';
     tabContentSim.classList.remove('active');
     tabContentSim.style.display = 'none';
-    
+
     logEvent('HỆ THỐNG', 'Chuyển sang chế độ kết nối THIẾT BỊ THẬT.', 'info');
   });
 
@@ -1162,7 +1199,7 @@ void loop() {
 
   // --- Initial Operations ---
   loadSettings();
-  
+
   // Inject some initial simulator values and run first update
   updateSimLabels();
   updateDeviceData({
@@ -1171,7 +1208,7 @@ void loop() {
     door: simBtnDoor.classList.contains('active') ? 1 : 0,
     current: parseFloat(simCurrent.value)
   });
-  
+
   // Start automatic drift simulation
   startAutoDrift();
 
