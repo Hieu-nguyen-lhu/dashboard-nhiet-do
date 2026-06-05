@@ -1134,6 +1134,7 @@ void loop() {
     Serial.println((doorState == HIGH) ? "ĐANG MỞ 🔓" : "ĐÃ ĐÓNG 🔒");
     Serial.print("⚡ Dòng điện: "); Serial.print(currentVal, 3); Serial.println(" A");
     Serial.print("📡 Wi-Fi hiện tại: "); Serial.println(WiFi.SSID());
+    Serial.print("🌐 Địa chỉ IP ESP32: "); Serial.println(WiFi.localIP());
     Serial.println("-------------------------");
 
     // Kịch bản kêu còi tại chỗ khi cửa mở
